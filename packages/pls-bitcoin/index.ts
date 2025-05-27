@@ -1,5 +1,5 @@
 // Importa a função de inicialização e os tipos do Wasm gerado
-import init, {
+import {
     getP2pkhAddress as getP2pkhAddressWasm,
     getTaprootAddress as getTaprootAddressWasm,
     getMultisigAddress as getMultisigAddressWasm,
