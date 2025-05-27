@@ -1,157 +1,86 @@
-import { toXOnly } from "bitcoinjs-lib/src/psbt/bip371";
-import type { Taptree } from "bitcoinjs-lib/src/types";
-import { sortScriptsIntoTree } from "./huffman";
-export interface UTXO {
-	txid: string;
-	vout: number;
-	value: number;
-}
-import type { ECPairInterface } from "ecpair";
-import {
-	script,
-	type Network,
-	payments,
-	type SignerAsync,
-	type Signer,
-	Psbt,
-} from "bitcoinjs-lib";
-import { PubkeysSchema } from "pls-core";
-import { z } from "zod";
+// Importa a função de inicialização e os tipos do Wasm gerado
+import init, {
+    getP2pkhAddress as getP2pkhAddressWasm,
+    getTaprootAddress as getTaprootAddressWasm,
+    getMultisigAddress as getMultisigAddressWasm,
+    getCollateralOutputScript as getCollateralOutputScriptWasm,
+    signPsbt as signPsbtWasm,
+    finalizePsbt as finalizePsbtWasm,
+    extractTransaction as extractTransactionWasm,
+    // Adicione outras funções exportadas do Rust aqui
+} from './pkg_wasm/pls_bitcoin_wasm'; // Caminho para o JS gerado pelo wasm-pack
 
-const TaprootV0CollateralSchema = {
-	arbitratorsQuorum: z.number(),
-	multisigAddress: z.string(),
-	pubkeys: PubkeysSchema,
-	type: z.literal("taproot-v0"),
-};
+// Variável para armazenar o estado de inicialização
+let wasmInitialized = false;
 
-export const bitcoinSchemas = {
-	mainnet: z.object({
-		network: z.literal("bitcoin"),
-		...TaprootV0CollateralSchema,
-	}),
-	testnet: z.object({
-		network: z.literal("bitcoin_testnet"),
-		...TaprootV0CollateralSchema,
-	}),
-};
-
-// Invalid point, there is not priv key to sign this, should be random
-export const H = Buffer.from(
-	"50929b74c1a04954b78b4b6035e97a5e078a5a0f28ec96d547bfee9ace803ac0",
-	"hex"
-);
-
-export const combine = <T>(items: Array<T>, size: number): Array<Array<T>> => {
-	const intCombine = (
-		acc: Array<T>,
-		rem: Array<T>,
-		curr: number
-	): Array<any> => {
-		if (curr === 0) return acc;
-		return rem.map((i, idx) => {
-			return intCombine([...acc, i], rem.slice(idx + 1), curr - 1);
-		});
-	};
-
-	return intCombine([], items, size).flat(size - 1);
-};
-
-export function createBitcoinMultisig(
-	publicPartsECPairs: ECPairInterface[],
-	publicArbitratorsECPairs: ECPairInterface[],
-	arbitratorsQuorum: number,
-	network: Network
-) {
-	const eachChildNodeWithArbitratorsQuorum = publicPartsECPairs
-		.map((p) =>
-			combine(publicArbitratorsECPairs, arbitratorsQuorum).map((a) => [p, ...a])
-		)
-		.flat(1);
-	const childNodesCombinations = [
-		publicPartsECPairs,
-		...eachChildNodeWithArbitratorsQuorum,
-	];
-	const multisigAsms = childNodesCombinations.map(
-		(childNodes) =>
-			childNodes
-				.map((childNode) => toXOnly(childNode.publicKey).toString("hex"))
-				.map(
-					(pubkey, idx) =>
-						pubkey + " " + (idx ? "OP_CHECKSIGADD" : "OP_CHECKSIG")
-				)
-				.join(" ") + ` OP_${childNodes.length} OP_NUMEQUAL`
-	);
-
-	const multisigScripts = multisigAsms.map((ma, idx) => {
-		return {
-			// when building Taptree, prioritize parts agreement script (shortest path), using 1 for parts script and 5 for scripts with arbitrators
-			weight: idx ? 1 : 5,
-			leaf: { output: script.fromASM(ma) },
-			combination: childNodesCombinations[idx]!,
-		};
-	});
-
-	const scriptTree: Taptree = sortScriptsIntoTree(multisigScripts)!;
-
-	const multisig = payments.p2tr({
-		internalPubkey: toXOnly(H),
-		scriptTree,
-		network,
-	});
-
-	return { multisigScripts, multisig };
+// Função de inicialização assíncrona para o módulo Wasm
+async function initializeWasm() {
+    if (!wasmInitialized) {
+        await init(); // Chama a função de inicialização do Wasm
+        wasmInitialized = true;
+    }
 }
 
-export async function startTxSpendingFromMultisig(
-	multisig: payments.Payment,
-	redeemOutput: string,
-	signer: Signer | SignerAsync,
-	network: Network,
-	receivingAddresses: {
-		address: string;
-		value: number;
-	}[],
-	utxos: UTXO[],
-	locktime?: number
-) {
-	const multisigRedeem = {
-		output: Buffer.from(redeemOutput, "hex"),
-		redeemVersion: 192,
-	};
+// Reexportar as funções, agora envolvendo a inicialização do Wasm
+// e adaptando as assinaturas se necessário.
 
-	const multisigP2tr = payments.p2tr({
-		internalPubkey: toXOnly(H),
-		scriptTree: multisig.scriptTree,
-		redeem: multisigRedeem,
-		network,
-	});
-
-	const tapLeafScript = {
-		leafVersion: multisigRedeem.redeemVersion,
-		script: multisigRedeem.output,
-		controlBlock: multisigP2tr.witness![multisigP2tr.witness!.length - 1]!,
-	};
-
-	const psbt = new Psbt({ network });
-
-	psbt.addInputs(
-		utxos.map((utxo) => ({
-			hash: utxo.txid,
-			index: utxo.vout,
-			witnessUtxo: { value: utxo.value, script: multisigP2tr.output! },
-			tapLeafScript: [tapLeafScript],
-		}))
-	);
-
-	if (locktime) {
-		psbt.setLocktime(locktime);
-		psbt.txInputs.forEach((_, i) => psbt.setInputSequence(i, 0));
-	}
-
-	psbt.addOutputs(receivingAddresses);
-
-	await psbt.signAllInputsAsync(signer);
-
-	return psbt;
+export async function getP2pkhAddress(publicKeyBytes: Uint8Array, network: string): Promise<string> {
+    await initializeWasm();
+    return getP2pkhAddressWasm(publicKeyBytes, network);
 }
+
+export async function getTaprootAddress(
+    internalPublicKeyBytes: Uint8Array,
+    tapTreeLeavesJs: any, // Adapte o tipo conforme a estrutura esperada pelo Rust
+    network: string
+): Promise<string> {
+    await initializeWasm();
+    return getTaprootAddressWasm(internalPublicKeyBytes, tapTreeLeavesJs, network);
+}
+
+export async function getMultisigAddress(
+    m: number,
+    publicKeysJs: Uint8Array[],
+    network: string,
+    addressType: string
+): Promise<string> {
+    await initializeWasm();
+    return getMultisigAddressWasm(m, publicKeysJs, network, addressType);
+}
+
+export async function getCollateralOutputScript(
+    arbitratorXOnlyPubkeysJs: Uint8Array[],
+    mQuorum: number,
+    userInternalXOnlyPubkeyBytes: Uint8Array
+): Promise<Uint8Array> {
+    await initializeWasm();
+    return getCollateralOutputScriptWasm(arbitratorXOnlyPubkeysJs, mQuorum, userInternalXOnlyPubkeyBytes);
+}
+
+// Lembre-se que signPsbt é um stub e precisa de implementação no Rust.
+export async function signPsbt(psbtBase64: string, signRequestsJs: any): Promise<string> {
+    await initializeWasm();
+    // Atenção: A função Rust original retorna um Erro indicando que precisa de implementação.
+    // Você precisará tratar isso ou implementar a lógica no Rust.
+    try {
+        return await signPsbtWasm(psbtBase64, signRequestsJs);
+    } catch (error) {
+        console.error("Error in signPsbtWasm:", error);
+        throw error; // Re-throw ou trate o erro apropriadamente
+    }
+}
+
+export async function finalizePsbt(psbtBase64: string): Promise<string> {
+    await initializeWasm();
+    return finalizePsbtWasm(psbtBase64);
+}
+
+export async function extractTransaction(psbtBase64: string): Promise<string> {
+    await initializeWasm();
+    return extractTransactionWasm(psbtBase64);
+}
+
+// Adicione wrappers para outras funções conforme necessário.
+
+// Opcional: Exportar a função de inicialização se precisar ser chamada manualmente de fora.
+export { initializeWasm };
