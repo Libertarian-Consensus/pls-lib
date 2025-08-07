@@ -6,11 +6,10 @@
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.ts",
 	"scripts": {
-	
 		"dev": "npm run build -- --watch",
 		"build:wasm": "cd wasm && wasm-pack build --target nodejs --out-dir ../pkg_wasm",
-		"build": "tsup index.ts --format cjs,esm --dts",
-		"test": "echo 'Add test script here'",
+		"build": "tsup index.ts --format cjs,esm --dts && cp pkg_wasm/*.wasm dist/",
+		"test": "node test-api.js",
 		"lint": "echo 'Add lint script here'"
 	},
 	"dependencies": {

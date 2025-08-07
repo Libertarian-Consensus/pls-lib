@@ -11,7 +11,7 @@ use serde_json::from_str;
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
 
-// Estrutura para representar um script com peso para a árvore de Huffman
+// Structure to represent a script with weight for the Huffman tree
 #[derive(serde::Deserialize, Debug, Clone)]
 struct ScriptWithWeight {
     script_hex: String,
