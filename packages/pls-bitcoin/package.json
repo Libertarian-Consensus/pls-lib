@@ -24,6 +24,7 @@
 		"@repo/typescript-config": "workspace:*",
     "tsup": "^8.0.1",
     "vitest": "^1.6.1",
-    "@vitest/coverage-v8": "^1.6.1"
+    "@vitest/coverage-v8": "^1.6.1",
+    "tiny-secp256k1": "^2.2.3"
 	}
 }
