@@ -1,0 +1,19 @@
+{
+  "mainnet": {
+    "p2pkh": [
+      { "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", "label": "satoshi-genesis-example" },
+      { "address": "1BgGZ9tcN4rm9KBzDn7KprQz87SZ26SAMH", "label": "example-2" }
+    ],
+    "bech32": [
+      { "address": "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080", "label": "bip173-example" }
+    ]
+  },
+  "testnet": {
+    "p2pkh": [
+      { "address": "mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn", "label": "bip32-test-vector" }
+    ],
+    "bech32": [
+      { "address": "tb1qjqmxmk938vzp7f2f0p2hh4c9p8l6q9s6l8l9h8", "label": "example" }
+    ]
+  }
+}
