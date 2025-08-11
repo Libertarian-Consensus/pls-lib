@@ -1,0 +1,12 @@
+{
+  "mainnet": {
+    "bech32": [
+      { "address": "lq1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsgp3h8", "label": "example" }
+    ]
+  },
+  "testnet": {
+    "bech32": [
+      { "address": "tq1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqs0l7r3", "label": "example" }
+    ]
+  }
+}
