@@ -17,3 +17,11 @@ Structure
 - fixtures/: deterministic data used by tests
 - unit/: unit tests for focused functions
 - integration/: lightweight integration checks (e.g., module exports)
+
+Run Report (latest)
+- Date: 2025-08-11
+- Runner: Vitest v1.6.1 (node)
+- Results:
+  - Test Files: 4 passed (4)
+  - Tests: 18 passed (18)
+  - Duration: ~0.8s (local)
