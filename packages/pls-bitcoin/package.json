@@ -7,8 +7,8 @@
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"dev": "npm run build -- --watch",
-		"build:wasm": "cd wasm && wasm-pack build --target nodejs --out-dir ../pkg_wasm",
-		"build": "tsup index.ts --format cjs,esm --dts && cp pkg_wasm/*.wasm dist/",
+		"build:wasm": "cd wasm && wasm-pack build --target bundler --out-dir ../pkg_wasm",
+		"build": "npm run build:wasm && tsup index.ts --format cjs,esm --dts && cp pkg_wasm/*.wasm dist/",
 		"test": "node test-api.js",
 		"lint": "echo 'Add lint script here'"
 	},
