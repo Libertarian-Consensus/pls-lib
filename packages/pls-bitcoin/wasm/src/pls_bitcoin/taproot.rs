@@ -10,6 +10,7 @@ use bitcoin::XOnlyPublicKey;
 use serde_json::from_str;
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::{throw_str, UnwrapThrowExt};
 
 // Structure to represent a script with weight for the Huffman tree
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -51,9 +52,9 @@ pub fn get_taproot_address(
     network_str: &str,
 ) -> Result<String, JsValue> {
     let internal_pk_bytes = hex::decode(internal_public_key_hex)
-        .map_err(|e| JsValue::from_str(&format!("Invalid internal public key hex: {}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Invalid internal public key hex: {e}")));
     let internal_pk = PublicKey::from_slice(&internal_pk_bytes)
-        .map_err(|e| JsValue::from_str(&format!("Failed to parse internal public key: {}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Failed to parse internal public key: {e}")));
 
     // Corrected: PublicKey.inner (secp256k1::PublicKey) has x_only_public_key
     let (internal_x_only_pk, _parity) = internal_pk.inner.x_only_public_key();
@@ -62,15 +63,15 @@ pub fn get_taproot_address(
         "bitcoin" => Network::Bitcoin,
         "testnet" => Network::Testnet,
         "regtest" => Network::Regtest,
-        _ => return Err(JsValue::from_str("Invalid network string")),
+        _ => throw_str("Invalid network string"),
     };
 
     let scripts_hex_vec: Vec<String> = from_str(scripts_json)
-        .map_err(|e| JsValue::from_str(&format!("Invalid scripts_json: {}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Invalid scripts_json: {e}")));
 
     let spend_info =
         build_simple_taproot_spend_info_from_scripts(internal_x_only_pk, scripts_hex_vec)
-            .map_err(|e_str| JsValue::from_str(&e_str))?;
+            .unwrap_or_else(|e_str| throw_str(&e_str));
 
     let secp_for_address = bitcoin::secp256k1::Secp256k1::new();
     let address = bitcoin::Address::p2tr(

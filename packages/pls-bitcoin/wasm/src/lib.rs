@@ -4,6 +4,7 @@ use bitcoin::Address;
 use bitcoin::Network;
 use bitcoin::PublicKey;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::{throw_str, UnwrapThrowExt};
 
 use std::sync::Once;
 
@@ -16,9 +17,7 @@ pub fn setup_panic_hook() {
 }
 
 // Helper para converter erros em JsValue
-fn to_js_error<E: std::fmt::Debug>(e: E) -> JsValue {
-    JsValue::from_str(&format!("{:?}", e))
-}
+fn to_js_error<E: std::fmt::Debug>(e: E) -> JsValue { JsValue::from_str(&format!("{:?}", e)) }
 
 #[wasm_bindgen(js_name = getP2pkhAddress)]
 pub fn get_p2pkh_address(
@@ -26,13 +25,13 @@ pub fn get_p2pkh_address(
     network_str: String,
 ) -> Result<String, JsValue> {
     let pk = PublicKey::from_slice(&public_key_bytes)
-        .map_err(|e| to_js_error(format!("PublicKey::from_slice error: {:?}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("PublicKey::from_slice error: {e:?}")));
 
     let network = match network_str.to_lowercase().as_str() {
         "mainnet" | "bitcoin" => Network::Bitcoin,
         "testnet" => Network::Testnet,
         "regtest" => Network::Regtest,
-        _ => return Err(JsValue::from_str("\"Invalid network string\"")), // Adjusted for assert
+        _ => throw_str("\"Invalid network string\""), // Adjusted for assert
     };
 
     let address = Address::p2pkh(&pk, network);
@@ -66,13 +65,13 @@ pub fn get_taproot_address(
     let secp = Secp256k1::new();
 
     let internal_pk = XOnlyPublicKey::from_slice(&internal_public_key_bytes)
-        .map_err(|e| to_js_error(format!("Invalid internal public key: {:?}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Invalid internal public key: {e:?}")));
 
     let network = match network_str.to_lowercase().as_str() {
         "mainnet" | "bitcoin" => Network::Bitcoin,
         "testnet" => Network::Testnet,
         "regtest" => Network::Regtest,
-        _ => return Err(JsValue::from_str("\"Invalid network string\"")), // Adjusted for assert
+        _ => throw_str("\"Invalid network string\""), // Adjusted for assert
     };
 
     let merkle_root_option: Option<TapNodeHash> = if tap_tree_leaves_js.is_null()
@@ -80,35 +79,26 @@ pub fn get_taproot_address(
     {
         None
     } else {
-        let leaves_info_res: Result<Vec<TapLeafInfo>, _> =
-            serde_wasm_bindgen::from_value(tap_tree_leaves_js.clone());
-        match leaves_info_res {
-            Ok(leaves_info) => {
-                if leaves_info.is_empty() {
+        let leaves_info_res: Vec<TapLeafInfo> =
+            serde_wasm_bindgen::from_value(tap_tree_leaves_js.clone())
+                .unwrap_or_else(|e| throw_str(&format!("serde_wasm_bindgen::from_value error for TapLeafInfo: {e:?}")));
+        {
+                if leaves_info_res.is_empty() {
                     None
                 } else {
                     let mut builder = TaprootBuilder::new();
-                    for leaf_info in leaves_info {
+                    for leaf_info in leaves_info_res {
                         let script = ScriptBuf::from(leaf_info.script_bytes);
                         // Depth of 0 is typical for simple scripts in a tapleaf.
-                        builder = builder.add_leaf(0, script.clone()).map_err(|e| {
-                            to_js_error(format!("Failed to add leaf to TaprootBuilder: {:?}", e))
-                        })?;
+                        builder = builder.add_leaf(0, script.clone())
+                            .unwrap_or_else(|e| throw_str(&format!("Failed to add leaf to TaprootBuilder: {e:?}")));
                     }
                     // Finalize the builder to get TaprootSpendInfo
                     let spend_info: TaprootSpendInfo =
-                        builder.finalize(&secp, internal_pk).map_err(|e| {
-                            to_js_error(format!("Failed to finalize TaprootBuilder: {:?}", e))
-                        })?;
+                        builder.finalize(&secp, internal_pk)
+                        .unwrap_or_else(|e| throw_str(&format!("Failed to finalize TaprootBuilder: {e:?}")));
                     spend_info.merkle_root()
                 }
-            }
-            Err(e) => {
-                return Err(to_js_error(format!(
-                    "serde_wasm_bindgen::from_value error for TapLeafInfo: {:?}",
-                    e
-                )))
-            }
         }
     };
 
@@ -125,32 +115,23 @@ pub fn get_multisig_address(
     address_type_str: String,
 ) -> Result<String, JsValue> {
     let public_keys_outer: Vec<Vec<u8>> = serde_wasm_bindgen::from_value(public_keys_js.clone())
-        .map_err(|e| {
-            to_js_error(format!(
-                "serde_wasm_bindgen::from_value error for public_keys_outer: {:?}",
-                e
-            ))
-        })?;
+        .unwrap_or_else(|e| throw_str(&format!("serde_wasm_bindgen::from_value error for public_keys_outer: {e:?}")));
 
     let mut pubkeys: Vec<PublicKey> = Vec::new();
     for pk_bytes in public_keys_outer {
         let pk = PublicKey::from_slice(&pk_bytes)
-            .map_err(|e| to_js_error(format!("Invalid public key in list: {:?}", e)))?;
+            .unwrap_or_else(|e| throw_str(&format!("Invalid public key in list: {e:?}")));
         pubkeys.push(pk);
     }
 
-    if m == 0 || m > pubkeys.len() {
-        return Err(to_js_error("Invalid m value for multisig"));
-    }
-    if pubkeys.len() > 16 {
-        return Err(to_js_error("Too many public keys for multisig (max 16)"));
-    }
+    if m == 0 || m > pubkeys.len() { throw_str("Invalid m value for multisig"); }
+    if pubkeys.len() > 16 { throw_str("Too many public keys for multisig (max 16)"); }
 
     let network = match network_str.to_lowercase().as_str() {
         "mainnet" | "bitcoin" => Network::Bitcoin,
         "testnet" => Network::Testnet,
         "regtest" => Network::Regtest,
-        _ => return Err(JsValue::from_str("\"Invalid network string\"")), // Adjusted for assert
+        _ => throw_str("\"Invalid network string\""), // Adjusted for assert
     };
 
     let mut builder = Builder::new();
@@ -163,14 +144,10 @@ pub fn get_multisig_address(
     let script = builder.into_script();
 
     let addr_result = match address_type_str.to_lowercase().as_str() {
-        "p2sh" => {
-            Address::p2sh(&script, network).map_err(|e| to_js_error(format!("P2SH error: {:?}", e)))
-        }
+        "p2sh" => { Address::p2sh(&script, network).map_err(|e| to_js_error(format!("P2SH error: {e:?}"))) }
         "p2wsh" => Ok(Address::p2wsh(&script, network)),
         _ => {
-            return Err(to_js_error(
-                "Invalid address_type. Must be 'p2sh' or 'p2wsh'",
-            ))
+            throw_str("Invalid address_type. Must be 'p2sh' or 'p2wsh'")
         }
     };
 
@@ -184,30 +161,21 @@ pub fn get_collateral_output_script(
     user_internal_x_only_pubkey_bytes: Vec<u8>,
 ) -> Result<Vec<u8>, JsValue> {
     let arbitrator_x_only_pubkeys_outer: Vec<Vec<u8>> =
-        serde_wasm_bindgen::from_value(arbitrator_x_only_pubkeys_js.clone()).map_err(|e| {
-            to_js_error(format!(
-                "serde_wasm_bindgen::from_value error for arbitrator_x_only_pubkeys_outer: {:?}",
-                e
-            ))
-        })?;
+        serde_wasm_bindgen::from_value(arbitrator_x_only_pubkeys_js.clone())
+            .unwrap_or_else(|e| throw_str(&format!(
+                "serde_wasm_bindgen::from_value error for arbitrator_x_only_pubkeys_outer: {e:?}")));
 
     let mut arbiters_keys: Vec<XOnlyPublicKey> = Vec::new();
     for pk_bytes in arbitrator_x_only_pubkeys_outer {
-        let pk = XOnlyPublicKey::from_slice(&pk_bytes).map_err(|e| {
-            to_js_error(format!(
-                "Invalid arbitrator x-only public key in list: {:?}",
-                e
-            ))
-        })?;
+        let pk = XOnlyPublicKey::from_slice(&pk_bytes)
+            .unwrap_or_else(|e| throw_str(&format!("Invalid arbitrator x-only public key in list: {e:?}")));
         arbiters_keys.push(pk);
     }
 
-    if m_quorum == 0 || m_quorum > arbiters_keys.len() {
-        return Err(to_js_error("Invalid m_quorum value for collateral script"));
-    }
+    if m_quorum == 0 || m_quorum > arbiters_keys.len() { throw_str("Invalid m_quorum value for collateral script"); }
 
     let user_internal_pk = XOnlyPublicKey::from_slice(&user_internal_x_only_pubkey_bytes)
-        .map_err(|e| to_js_error(format!("Invalid user internal x-only public key: {:?}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Invalid user internal x-only public key: {e:?}")));
 
     let mut witness_script_builder = Builder::new();
     witness_script_builder = witness_script_builder.push_int(m_quorum as i64);
@@ -225,16 +193,12 @@ pub fn get_collateral_output_script(
     let mut taproot_builder = TaprootBuilder::new();
     taproot_builder = taproot_builder
         .add_leaf(0, witness_script.clone())
-        .map_err(|e| to_js_error(format!("Failed to add witness script leaf: {:?}", e)))?;
+        .unwrap_or_else(|e| throw_str(&format!("Failed to add witness script leaf: {e:?}")));
 
     let spend_info = taproot_builder
         .finalize(&secp, user_internal_pk)
-        .map_err(|e| {
-            to_js_error(format!(
-                "Failed to finalize taproot builder for collateral script: {:?}",
-                e
-            ))
-        })?;
+        .unwrap_or_else(|e| throw_str(&format!(
+            "Failed to finalize taproot builder for collateral script: {e:?}")));
 
     let temp_network_for_script = Network::Bitcoin;
     let address = Address::p2tr(
