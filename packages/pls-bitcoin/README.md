@@ -219,12 +219,40 @@ pls-bitcoin/
 ### Build
 
 ```bash
-# Build WASM
-cd wasm
-wasm-pack build --target web
-
-# Build TypeScript
+# Build único (gera WASM + TS)
 npm run build
+# ou
+pnpm run build
+```
+
+Notas:
+- O comando acima executa o build do WASM com `wasm-pack --target bundler` e, em seguida, faz o bundle TypeScript (CJS/ESM/d.ts).
+- O artefato `.wasm` gerado em `pkg_wasm/` é copiado para `dist/` para facilitar o consumo via bundlers.
+
+### Testes (WASM)
+
+```bash
+# Executar testes de integração do WASM
+cd wasm
+wasm-pack test --node
+# (opcional)
+wasm-pack test --chrome
+```
+
+### Tratamento de erros (WASM → JS)
+
+- As funções expostas pelo WASM lançam exceptions JS diretamente utilizando `unwrap_throw`/`expect_throw`/`throw_str` do `wasm-bindgen`.
+- A camada consumidora (TS/JS) deve validar entradas antes de chamar a lib e capturar exceptions via `try/catch` quando necessário.
+
+Exemplo em TypeScript:
+
+```ts
+try {
+  const addr = await getP2pkhAddress({ publicKeyBytes, network: 'mainnet' });
+} catch (e) {
+  // e é uma exception JS lançada pelo módulo WASM
+  console.error('Failed:', e);
+}
 ```
 
 ## License

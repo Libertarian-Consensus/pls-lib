@@ -139,6 +139,12 @@ const txHex = await extractTransaction({
 - You can migrate gradually
 - No breaking changes to existing code
 
+### Error Handling Strategy (WASM)
+
+- A camada WASM lança exceptions via `unwrap_throw`/`expect_throw`/`throw_str`.
+- Valide entradas no TS/JS antes de chamar a lib. Use `try/catch` para capturar exceptions quando necessário.
+- Essa abordagem simplifica a fronteira Rust↔JS e reduz boilerplate no código Rust.
+
 ### Phase 2: Gradual Migration
 - Use the new API in new code
 - Migrate existing code during maintenance
