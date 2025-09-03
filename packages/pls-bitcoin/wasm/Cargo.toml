@@ -21,3 +21,9 @@ js-sys = "0.3.77"
 wasm-bindgen-test = "0.3.42"
 serde_json = "1.0" # For creating complex JsValue in tests if needed
 
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
