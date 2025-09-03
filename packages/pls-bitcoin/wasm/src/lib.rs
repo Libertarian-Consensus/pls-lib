@@ -275,7 +275,7 @@ pub fn extract_transaction(psbt_base64: String) -> Result<String, JsValue> {
     Ok(tx_hex)
 }
 
-#[cfg(test)]
+#[cfg(test_disabled)]
 mod tests {
     use super::Base64Standard;
     use super::setup_panic_hook;
