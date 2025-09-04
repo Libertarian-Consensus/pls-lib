@@ -34,7 +34,7 @@ pub fn get_multisig_address(
     for pk_hex_js in public_keys_hex.iter() {
         let pk_hex = pk_hex_js
             .as_string()
-            .unwrap_or_else(|| throw_str("Public key hex must be a string"));
+            .expect_throw("Public key hex must be a string");
         let pk_bytes = hex::decode(pk_hex)
             .unwrap_or_else(|e| throw_str(&format!("Invalid public key hex for multisig: {e}")));
         let public_key = PublicKey::from_slice(&pk_bytes)
